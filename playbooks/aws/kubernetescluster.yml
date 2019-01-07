@@ -1,0 +1,197 @@
+## creating a kubernetes cluster
+## providing different packages on multiple instances on initial run
+
+- hosts: localhost
+  vars:
+    subnet:                           
+    zone:                            
+    vpc:                            
+    arn: arn:aws:iam::XXXXXXXXXX:role/iam_role_for_Deployment    
+    session: orchestrating_kubernetes_cluster
+    worker_count: 2                                             
+    master_count: 1
+    key:                                 
+    instance: t2.small
+    image: ami-dd3c0f36                                         # CentOS7
+    region: eu-central-1                                        # Frankfurt/Main
+    worker_tags:
+      Name: kube-worker
+      Application: Kubernetes_worker
+      Environment: Dev
+      Finance-ID: 1337
+    master_tags:
+      Name: kube-master
+      Application: Kubernetes_master
+      Environment: Dev
+      Finance-ID: 1337
+    securitygroups: ['SSH']                             # multiple groups seperatet by comma e.g. ['a','b']
+
+  gather_facts: False
+  tasks:
+
+    - name: switch role                 
+      local_action:
+        module: sts_assume_role
+        role_arn: "{{ arn }}"
+        role_session_name: "{{ session }}"
+        region: "{{ region }}"
+      changed_when: false
+      register: assumed_role
+
+########################################################################################
+#   Start generating worker-nodes, wait for SSH, tag them like kube-worker-01,02 etc.  #
+#   and add them to the ansible-playbook in-memory inventory                           #
+########################################################################################
+
+    - name: create "{{ worker_count }}" worker nodes
+      local_action:
+        module: ec2
+        aws_access_key: "{{ assumed_role.sts_creds.access_key }}"
+        aws_secret_key: "{{ assumed_role.sts_creds.secret_key }}"
+        security_token: "{{ assumed_role.sts_creds.session_token }}"
+        key_name: "{{ key }}"
+        group: "{{ securitygroups }}"
+        instance_type: "{{ instance }}"
+        image: "{{ image }}"
+        wait: true
+        region: "{{ region }}"
+        instance_tags: "{{ worker_tags }}"
+        count_tag:
+            Application: "{{ worker_tags.Application }}"
+        exact_count: "{{ worker_count }}"
+        volumes:
+          - device_name: /dev/sda1
+            volume_type: gp2
+            volume_size: 10
+            delete_on_termination: true
+        vpc_subnet_id: "{{ subnet }}"
+        zone: "{{ zone }}"
+      register: workers
+
+    - name: Wait for "{{ worker_count }}" worker node's SSH to come up
+      local_action: wait_for
+                    host={{ item.private_ip }}
+                    port=22
+                    state=started
+      with_items: "{{ workers.instances }}"
+
+    - name: add "{{ worker_count }}" worker nodes to group kube_cluster
+      add_host:
+        name: "{{ item.private_ip }}"
+        groups:
+          - kube_worker
+          - kube_cluster
+        ansible_user: centos
+        ansible_port: 22
+        ansible_ssh_private_key_file: ~/.ssh/id_rsa
+      with_items: "{{ workers.instances }}"
+
+
+    - name: "tagging {{ worker_tags.Name }}'s"
+      ec2_tag:
+       aws_access_key: "{{ assumed_role.sts_creds.access_key }}"
+       aws_secret_key: "{{ assumed_role.sts_creds.secret_key }}"
+       security_token: "{{ assumed_role.sts_creds.session_token }}"
+       region: "{{ region }}"
+       resource: "{{ item.1.id }}"
+       tags:
+         Name: "{{ worker_tags.Name }}-{{ '%02d' | format(item.0 + 1) }}"
+      with_indexed_items: "{{ workers.instances }}"
+      loop_control:
+         label: "{{ item.1.id }} - {{ worker_tags.Name }}-{{ '%02d' | format(item.0 + 1) }}"
+
+#######################################################
+#  Worker-nodes are up, tagged and have been added to #
+#  the ansible-playbook in-memory inventory           #
+#######################################################
+
+
+########################################################################################
+#   Start generating master-nodes, wait for SSH, tag them like kube-master-01,02 etc.  #
+#   and add them to the ansible-playbook in-memory inventory                           #
+########################################################################################
+
+    - name: create "{{ master_count }}" master nodes
+      local_action:
+        module: ec2
+        aws_access_key: "{{ assumed_role.sts_creds.access_key }}"
+        aws_secret_key: "{{ assumed_role.sts_creds.secret_key }}"
+        security_token: "{{ assumed_role.sts_creds.session_token }}"
+        key_name: "{{ key }}"
+        group: "{{ securitygroups }}"
+        instance_type: "{{ instance }}"
+        image: "{{ image }}"
+        wait: true
+        region: "{{ region }}"
+        instance_tags: "{{ master_tags }}"
+        count_tag:
+            Application: "{{ master_tags.Application }}"
+        exact_count: "{{ master_count }}"
+        volumes:
+          - device_name: /dev/sda1
+            volume_type: gp2
+            volume_size: 10
+            delete_on_termination: true
+        vpc_subnet_id: "{{ subnet }}"
+        zone: "{{ zone }}"
+      register: masters
+
+    - name: Wait for "{{ master_count }}" master node's SSH to come up
+      local_action: wait_for
+                    host={{ item.private_ip }}
+                    port=22
+                    state=started
+      with_items: "{{ masters.instances }}"
+
+    - name: add "{{ master_count }}" master nodes to group kube_cluster
+      add_host:
+        name: "{{ item.private_ip }}"
+        groups:
+          - kube_master
+          - kube_cluster
+        ansible_user: centos
+        ansible_port: 22
+        ansible_ssh_private_key_file: ~/.ssh/id_rsa
+      with_items: "{{ masters.instances }}"
+
+    - name: "tagging {{ master_tags.Name }}'s"
+      ec2_tag:
+       aws_access_key: "{{ assumed_role.sts_creds.access_key }}"
+       aws_secret_key: "{{ assumed_role.sts_creds.secret_key }}"
+       security_token: "{{ assumed_role.sts_creds.session_token }}"
+       region: "{{ region }}"
+       resource: "{{ item.1.id }}"
+       tags:
+         Name: "{{ master_tags.Name }}-{{ '%02d' | format(item.0 + 1) }}"
+      with_indexed_items: "{{ masters.instances }}"
+      loop_control:
+         label: "{{ item.1.id }} - {{ master_tags.Name }}-{{ '%02d' | format(item.0 + 1) }}"
+
+
+#######################################################
+#  Master-nodes are up, tagged and have been added to #
+#  the ansible-playbook in-memory inventory           #
+#######################################################
+
+#  Deploy some Stuff to _all_ instances in this cluster. eg. users, vim etc.
+
+- hosts: kube_cluster
+  gather_facts: no
+
+  roles:
+    - { role: technology/vim-enhanced }
+    - { role: technology/htop }
+    - { role: technology/docker }
+    - { role: technology/kubernetes }
+
+# Deploy some Stuff to Kube-Master
+
+- hosts: kube_master
+  gather_facts: no
+
+  tasks:
+    - name: install kubectl
+      yum:
+         name: kubectl
+         state: present
+      become: true

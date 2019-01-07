@@ -1,0 +1,14 @@
+---
+# tasks file for vim-enhanced
+
+   - name: "Install vim-enhanced"
+     yum:
+       name: vim-enhanced
+     become: yes
+
+   - name: "copy vimrc to remote"
+     copy:
+       src: "{{ role_path }}/files/vimrc"
+       dest: /etc/vimrc
+       mode: 0644
+     become: true

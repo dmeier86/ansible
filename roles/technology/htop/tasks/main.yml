@@ -1,0 +1,24 @@
+---
+# tasks file for htop
+# epel is needed - so this script will check first if epel is installed on this host
+# then install htop.
+# not a beauty - but i have to get things working right now.
+# improving things will come eventually in the future. *fingers crossed*
+
+   - name: check if epel-release is installed
+     yum:
+       list: epel-release
+     register: is_installed
+
+   - name: install epel-release if not exist
+     yum:
+       name: epel-release
+       state: latest
+     when:  (is_installed.results|length == 1) or (is_installed.results[1].yumstate != 'installed') 
+     become: true
+
+   - name: "install htop"
+     yum:
+       name: htop
+       state: latest
+     become: true

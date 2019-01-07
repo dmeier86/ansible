@@ -1,0 +1,48 @@
+---
+# tasks file for docker & docker-compose on centos7
+
+ - name: "installing dependencies"
+   yum: state=present name={{ item }}
+   with_items:
+               - yum-utils
+               - device-mapper-persistent-data
+               - lvm2
+               - epel-release
+   become: true
+
+ - name: "installing python pip"
+   yum: state=present name={{ item }}
+   with_items:
+               - python-pip
+   become: true
+
+ - name: "add docker-ce repo gpg key"
+   rpm_key:
+     state: present
+     key: https://download.docker.com/linux/centos/gpg
+   become: true
+
+ - name: "add docker-ce repo"
+   yum_repository:
+     name: docker-ce
+     description: Docker Community Edition
+     baseurl: https://download.docker.com/linux/centos/7/x86_64/stable/
+   become: true
+
+ - name: "installing docker"
+   yum: state=present name={{ item }}
+   with_items:
+               - docker-ce
+   become: true
+
+ - name: "installing docker-compose"
+   pip:
+        name: docker-compose
+   become: true
+
+ - name: "starting docker and enable autostart"
+   systemd: 
+     name=docker
+     state=started
+     enabled=true
+   become: true
