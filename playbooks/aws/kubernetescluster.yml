@@ -6,7 +6,6 @@
     subnet:                           
     zone:                            
     vpc:                            
-    arn: arn:aws:iam::XXXXXXXXXX:role/iam_role_for_Deployment    
     session: orchestrating_kubernetes_cluster
     worker_count: 2                                             
     master_count: 1
@@ -24,19 +23,10 @@
       Application: Kubernetes_master
       Environment: Dev
       Finance-ID: 1337
-    securitygroups: ['SSH']                             # multiple groups seperatet by comma e.g. ['a','b']
+    securitygroups: ['SSH']                                     # multiple groups seperatet by comma e.g. ['a','b']
 
   gather_facts: False
   tasks:
-
-    - name: switch role                 
-      local_action:
-        module: sts_assume_role
-        role_arn: "{{ arn }}"
-        role_session_name: "{{ session }}"
-        region: "{{ region }}"
-      changed_when: false
-      register: assumed_role
 
 ########################################################################################
 #   Start generating worker-nodes, wait for SSH, tag them like kube-worker-01,02 etc.  #
@@ -46,9 +36,6 @@
     - name: create "{{ worker_count }}" worker nodes
       local_action:
         module: ec2
-        aws_access_key: "{{ assumed_role.sts_creds.access_key }}"
-        aws_secret_key: "{{ assumed_role.sts_creds.secret_key }}"
-        security_token: "{{ assumed_role.sts_creds.session_token }}"
         key_name: "{{ key }}"
         group: "{{ securitygroups }}"
         instance_type: "{{ instance }}"
@@ -70,28 +57,25 @@
 
     - name: Wait for "{{ worker_count }}" worker node's SSH to come up
       local_action: wait_for
-                    host={{ item.private_ip }}
+                    host={{ item.public_ip }}
                     port=22
                     state=started
       with_items: "{{ workers.instances }}"
 
     - name: add "{{ worker_count }}" worker nodes to group kube_cluster
       add_host:
-        name: "{{ item.private_ip }}"
+        name: "{{ item.public_ip }}"
         groups:
           - kube_worker
           - kube_cluster
         ansible_user: centos
         ansible_port: 22
-        ansible_ssh_private_key_file: ~/.ssh/id_rsa
+        ansible_ssh_private_key_file: ~/.ssh/Ansible.pem
       with_items: "{{ workers.instances }}"
 
 
     - name: "tagging {{ worker_tags.Name }}'s"
       ec2_tag:
-       aws_access_key: "{{ assumed_role.sts_creds.access_key }}"
-       aws_secret_key: "{{ assumed_role.sts_creds.secret_key }}"
-       security_token: "{{ assumed_role.sts_creds.session_token }}"
        region: "{{ region }}"
        resource: "{{ item.1.id }}"
        tags:
@@ -108,15 +92,12 @@
 
 ########################################################################################
 #   Start generating master-nodes, wait for SSH, tag them like kube-master-01,02 etc.  #
-#   and add them to the ansible-playbook in-memory inventory                           #
+#   and add them to the ansible in-memory inventory                                    #
 ########################################################################################
 
     - name: create "{{ master_count }}" master nodes
       local_action:
         module: ec2
-        aws_access_key: "{{ assumed_role.sts_creds.access_key }}"
-        aws_secret_key: "{{ assumed_role.sts_creds.secret_key }}"
-        security_token: "{{ assumed_role.sts_creds.session_token }}"
         key_name: "{{ key }}"
         group: "{{ securitygroups }}"
         instance_type: "{{ instance }}"
@@ -138,27 +119,24 @@
 
     - name: Wait for "{{ master_count }}" master node's SSH to come up
       local_action: wait_for
-                    host={{ item.private_ip }}
+                    host={{ item.public_ip }}
                     port=22
                     state=started
       with_items: "{{ masters.instances }}"
 
     - name: add "{{ master_count }}" master nodes to group kube_cluster
       add_host:
-        name: "{{ item.private_ip }}"
+        name: "{{ item.public_ip }}"
         groups:
           - kube_master
           - kube_cluster
         ansible_user: centos
         ansible_port: 22
-        ansible_ssh_private_key_file: ~/.ssh/id_rsa
+        ansible_ssh_private_key_file: ~/.ssh/Ansible.pem
       with_items: "{{ masters.instances }}"
 
     - name: "tagging {{ master_tags.Name }}'s"
       ec2_tag:
-       aws_access_key: "{{ assumed_role.sts_creds.access_key }}"
-       aws_secret_key: "{{ assumed_role.sts_creds.secret_key }}"
-       security_token: "{{ assumed_role.sts_creds.session_token }}"
        region: "{{ region }}"
        resource: "{{ item.1.id }}"
        tags:
