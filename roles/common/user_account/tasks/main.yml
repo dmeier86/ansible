@@ -1,0 +1,27 @@
+---
+# tasks file for user_account
+
+   - name: add user
+     user:
+       name: "{{username}}"
+       groups: "{{usergroups}}"
+     become: true
+   
+   - name: lookup ssh pubkeys from keyfiles and create ssh_pubkeys_list
+     set_fact:
+       ssh_pubkeys_list: "{{ lookup('file', item) }}"
+     with_items:
+       "{{ssh_public_keyfiles}}"
+     register: ssh_pubkeys_results_list
+   
+   - name: iterate over ssh_pubkeys_list and join into a string
+     set_fact:
+       ssh_pubkeys_string: "{{ ssh_pubkeys_results_list.results | map(attribute='ansible_facts.ssh_pubkeys_list') | list | join('\n') }}"
+   
+   - name: update SSH authorized_keys for user {{ username }} with contents of ssh_pubkeys_string
+     authorized_key:
+       user: "{{ username }}"
+       key: "{{ ssh_pubkeys_string }}"
+       state: present
+       exclusive: yes
+     become: true
