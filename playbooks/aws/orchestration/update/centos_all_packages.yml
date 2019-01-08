@@ -1,0 +1,8 @@
+---
+- hosts: tag_OS_CentOS*
+
+  tasks:
+
+  - name: Update all packages to latest
+    yum: name=* state=latest
+    become: true
