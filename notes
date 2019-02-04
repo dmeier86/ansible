@@ -1,0 +1,6 @@
+## ping specific tag
+ansible -m ping tag_OS_centos
+## pint multiple tags
+ansible -m ping "tag_OS_centos:&tag_Environment_testing"
+
+## multiple tags as hosts for a playbook

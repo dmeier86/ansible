@@ -1,5 +1,5 @@
 ---
-- hosts: tag_OS_CentOS*
+- hosts: tag_OS_centos:&tag_Environment_testing:&tag_Application_websrv
 
   tasks:
 

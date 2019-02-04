@@ -1,0 +1,87 @@
+---
+## creating centos7 nginx instance(s)
+
+- hosts: localhost
+  vars:
+    subnet:
+    zone:
+    vpc:
+    session: provision_centos_webserver_instance
+    instance_count: 2
+    key: Ansible
+    instance: t2.small
+    image: ami-dd3c0f36                                         # CentOS7
+    region: eu-central-1                                        # Frankfurt/Main
+    volumes:
+      - device_name: /dev/sda1
+        volume_type: gp2
+        volume_size: 10
+      - device_name: /dev/sdf
+        volume_type: gp2
+        volume_size: 20
+    instance_tags:
+      OS: centos
+      Name: centos-webserver-prd
+      Application: nginx
+      Environment: prd
+      Finance-ID: 1337
+    sg_tags:
+      Name: HTTP(S)
+    securitygroups: ['SSH', 'HTTP(S)']                                     # multiple groups seperatet by comma e.g. ['a','b']
+
+  gather_facts: False
+  tasks:
+
+
+    - name: "HTTP(S) security group"
+      ec2_group:
+        name: "HTTP(S)"
+        tags: "{{ sg_tags }}"
+        description: "sg for 80 & 443 on public web"
+#        vpc_id: vpc-xxxxxxxx
+#        profile: "{{ aws_profile }}"
+        region: eu-central-1
+        rules:
+          - proto: tcp
+            ports:
+            - 80
+            cidr_ip: 0.0.0.0/0
+            rule_desc: allow all on port 80
+          - proto: tcp
+            ports:
+            - 443
+            cidr_ip: 0.0.0.0/0
+            rule_desc: allow all on port 443
+
+
+    - name: "create '{{ instance_count }}' centos nodes"
+      local_action:
+        module: ec2
+        key_name: "{{ key }}"
+        group: "{{ securitygroups }}"
+        instance_type: "{{ instance }}"
+        image: "{{ image }}"
+        wait: true
+        region: "{{ region }}"
+        instance_tags: "{{ instance_tags }}"
+        count_tag:
+            Application: "{{ instance_tags.Application }}"
+        exact_count: "{{ instance_count }}"
+        volumes: "{{ volumes }}"
+        vpc_subnet_id: "{{ subnet }}"
+        zone: "{{ zone }}"
+      register: ec2
+
+    - name: "tag EBS"
+      local_action:
+        module: ec2_tag
+#        aws_access_key: "{{ assumed_role.sts_creds.access_key }}"
+#        aws_secret_key: "{{ assumed_role.sts_creds.secret_key }}"
+#        security_token: "{{ assumed_role.sts_creds.session_token }}"
+        region: "{{ region }}"
+        resource: "{{ item.value.volume_id }}"
+        tags:
+          Name: "{{ instance_tags.Name }}{% if item.key == '/dev/sda1' %}-SYS{% elif item.key == '/dev/sdf' %}-DATA{% else %}-UNKNOWN{% endif %}"
+      loop: "{{ lookup('dict', ec2.tagged_instances[0].block_device_mapping) }}"
+      loop_control:
+        label: "{{ item.key }}"
