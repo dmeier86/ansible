@@ -99,21 +99,9 @@
                     state=started
       with_items: "{{ ec2.instances }}"
 
+    - meta: refresh_inventory
 
-
-    - name: "add '{{ instance_count }}' nodes to tmp group"
-      add_host:
-        name: "{{ item.public_ip }}"
-        groups:
-          - tag_Environment_testing
-        ansible_user: centos
-        ansible_port: 22
-        ansible_ssh_private_key_file: ~/.ssh/Ansible.pem
-      with_items: "{{ ec2.instances }}"
-
-
-
-- hosts: tag_Environment_testing
+- hosts: "tag_Environment_testing:&tag_OS_centos"
 
   roles:
     - { role: technology/vim-enhanced }
