@@ -16,7 +16,7 @@
       Name: centos-test
       Application: testing
       Environment: testing
-      Finance-ID: 1337
+      FinanceID: 1337
     securitygroups: ['SSH']                                     # multiple groups seperatet by comma e.g. ['a','b']
 
   gather_facts: False
