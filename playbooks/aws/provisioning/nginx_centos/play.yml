@@ -7,7 +7,7 @@
     zone:
     vpc:
     session: provision_centos_webserver_instance
-    instance_count: 2
+    instance_count: 1
     key: Ansible
     instance: t2.small
     image: ami-dd3c0f36                                         # CentOS7
@@ -72,7 +72,21 @@
         zone: "{{ zone }}"
       register: ec2
 
-    - name: "tag EBS"
+    - name: "tag EBS volumes"
+      ec2_tag:
+#         aws_access_key: "{{ ec2_access_key }}"
+#         aws_secret_key: "{{ ec2_secret_key }}"
+#         security_token: "{{ access_token }}"
+       region: "{{ region }}"
+       resource: "{{ item.1.id }}"
+       tags: "{{ instance_tags | combine({'Instance': item.1.attachment_set.instance_id}, {'Device': item.1.attachment_set.device}) }}"
+      with_subelements:
+       - "{{ ec2_instances_volumes.results }}"
+       - volumes
+      loop_control:
+       label: "{{ item.1.id }} - {{ item.1.attachment_set.device }}"
+
+    - name: "tag EBS Names"
       local_action:
         module: ec2_tag
 #        aws_access_key: "{{ assumed_role.sts_creds.access_key }}"
@@ -85,3 +99,11 @@
       loop: "{{ lookup('dict', ec2.tagged_instances[0].block_device_mapping) }}"
       loop_control:
         label: "{{ item.key }}"
+
+    - meta: refresh_inventory
+
+- hosts: "tag_Environment_testing:&tag_OS_centos"
+
+  roles:
+    - { role: technology/vim-enhanced }
+    - { role: technology/htop }
