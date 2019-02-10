@@ -1,0 +1,31 @@
+---
+# tasks file for kubernetes_worker
+
+   - name: "add Kubernetes' YUM repository"
+     yum_repository:
+      name: Kubernetes
+      description: Kubernetes YUM repository
+      baseurl: https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+      gpgkey: https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+      gpgcheck: yes
+     become: true
+
+   - name: "install kubelet"
+     yum:
+        name: kubelet
+        state: present
+        update_cache: true
+     become: true
+
+   - name: "install kubeadm"
+     yum:
+        name: kubeadm
+        state: present
+     become: true
+
+   - name: "start kubelet"
+     service:
+       name: kubelet
+       enabled: yes
+       state: started
+     become: true

@@ -9,18 +9,20 @@
     session: orchestrating_kubernetes_cluster
     worker_count: 2                                             
     master_count: 1
-    key:                                 
+    key: Ansible                
     instance: t2.small
     image: ami-dd3c0f36                                         # CentOS7
     region: eu-central-1                                        # Frankfurt/Main
     worker_tags:
       Name: kube-worker
-      Application: Kubernetes_worker
+      Application: Kubernetes
+      Service: kubeworker
       Environment: Dev
       Finance-ID: 1337
     master_tags:
       Name: kube-master
-      Application: Kubernetes_master
+      Application: Kubernetes
+      Service: kubemaster
       Environment: Dev
       Finance-ID: 1337
     securitygroups: ['SSH']                                     # multiple groups seperatet by comma e.g. ['a','b']
@@ -33,7 +35,7 @@
 #   and add them to the ansible-playbook in-memory inventory                           #
 ########################################################################################
 
-    - name: create "{{ worker_count }}" worker nodes
+    - name: "create '{{ worker_count }}' worker nodes"
       local_action:
         module: ec2
         key_name: "{{ key }}"
@@ -44,7 +46,7 @@
         region: "{{ region }}"
         instance_tags: "{{ worker_tags }}"
         count_tag:
-            Application: "{{ worker_tags.Application }}"
+            Service: "{{ worker_tags.Service }}"
         exact_count: "{{ worker_count }}"
         volumes:
           - device_name: /dev/sda1
@@ -55,22 +57,11 @@
         zone: "{{ zone }}"
       register: workers
 
-    - name: Wait for "{{ worker_count }}" worker node's SSH to come up
+    - name: "Wait for '{{ worker_count }}' worker nodes SSH to come up"
       local_action: wait_for
                     host={{ item.public_ip }}
                     port=22
                     state=started
-      with_items: "{{ workers.instances }}"
-
-    - name: add "{{ worker_count }}" worker nodes to group kube_cluster
-      add_host:
-        name: "{{ item.public_ip }}"
-        groups:
-          - kube_worker
-          - kube_cluster
-        ansible_user: centos
-        ansible_port: 22
-        ansible_ssh_private_key_file: ~/.ssh/Ansible.pem
       with_items: "{{ workers.instances }}"
 
 
@@ -95,7 +86,7 @@
 #   and add them to the ansible in-memory inventory                                    #
 ########################################################################################
 
-    - name: create "{{ master_count }}" master nodes
+    - name: "create '{{ master_count }}' master nodes"
       local_action:
         module: ec2
         key_name: "{{ key }}"
@@ -106,7 +97,7 @@
         region: "{{ region }}"
         instance_tags: "{{ master_tags }}"
         count_tag:
-            Application: "{{ master_tags.Application }}"
+            Service: "{{ master_tags.Service }}"
         exact_count: "{{ master_count }}"
         volumes:
           - device_name: /dev/sda1
@@ -117,23 +108,6 @@
         zone: "{{ zone }}"
       register: masters
 
-    - name: Wait for "{{ master_count }}" master node's SSH to come up
-      local_action: wait_for
-                    host={{ item.public_ip }}
-                    port=22
-                    state=started
-      with_items: "{{ masters.instances }}"
-
-    - name: add "{{ master_count }}" master nodes to group kube_cluster
-      add_host:
-        name: "{{ item.public_ip }}"
-        groups:
-          - kube_master
-          - kube_cluster
-        ansible_user: centos
-        ansible_port: 22
-        ansible_ssh_private_key_file: ~/.ssh/Ansible.pem
-      with_items: "{{ masters.instances }}"
 
     - name: "tagging {{ master_tags.Name }}'s"
       ec2_tag:
@@ -146,6 +120,15 @@
          label: "{{ item.1.id }} - {{ master_tags.Name }}-{{ '%02d' | format(item.0 + 1) }}"
 
 
+    - name: "Wait for '{{ master_count }}' master nodes SSH to come up"
+      local_action: wait_for
+                    host={{ item.public_ip }}
+                    port=22
+                    state=started
+      with_items: "{{ masters.instances }}"
+
+    - meta: refresh_inventory
+
 #######################################################
 #  Master-nodes are up, tagged and have been added to #
 #  the ansible-playbook in-memory inventory           #
@@ -153,23 +136,29 @@
 
 #  Deploy some Stuff to _all_ instances in this cluster. eg. users, vim etc.
 
-- hosts: kube_cluster
+- hosts: "tag_Application_Kubernetes:&tag_Environment_Dev"
   gather_facts: no
 
   roles:
+    - { role: common/etc-hosts }
     - { role: technology/vim-enhanced }
     - { role: technology/htop }
     - { role: technology/docker }
-    - { role: technology/kubernetes }
+    - { role: technology/kubernetes-worker }
+
+
+# Deploy worker-nodes
+- hosts: "tag_Application_Kubernetes:&tag_Service_Kubeworker"
+  gather_facts: no
+
+  roles:
+    - { role: technology/kubernetes-worker }
+
 
 # Deploy some Stuff to Kube-Master
 
-- hosts: kube_master
+- hosts: "tag_Application_Kubernetes:&tag_Service_Kubemaster"
   gather_facts: no
 
-  tasks:
-    - name: install kubectl
-      yum:
-         name: kubectl
-         state: present
-      become: true
+  roles:
+    - { role: technology/kubernetes-master }

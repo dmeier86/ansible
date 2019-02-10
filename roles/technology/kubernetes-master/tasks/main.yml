@@ -1,5 +1,5 @@
 ---
-# tasks file for kubernetes
+# tasks file for kubernetes-master
 
    - name: "add Kubernetes' YUM repository"
      yum_repository:
@@ -10,22 +10,9 @@
       gpgcheck: yes
      become: true
 
-   - name: "install kubelet"
-     yum:
-        name: kubelet
-        state: present
-        update_cache: true
-     become: true
 
-   - name: "install kubeadm"
+   - name: install kubectl
      yum:
-        name: kubeadm
-        state: present
-     become: true
-
-   - name: "start kubelet"
-     service:
-       name: kubelet
-       enabled: yes
-       state: started
+      name: kubectl
+      state: present
      become: true

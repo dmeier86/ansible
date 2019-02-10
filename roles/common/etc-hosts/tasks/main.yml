@@ -1,11 +1,9 @@
 ---
 # tasks file for etc-hosts
 
-- name: "updating /etc/hosts"
-  template:
-    src: ../files/hosts.j2
+- name: update /etc/hosts file
+  blockinfile:
     dest: /etc/hosts
-    owner: root
-    group: root
-    mode: 0644
+    content: "{{ lookup('template', 'templates/hosts.j2') }}"
+    state: present
   become: true

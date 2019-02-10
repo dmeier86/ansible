@@ -1,0 +1,6 @@
+{% for host in play_hosts %}
+{% if host != 'localhost' %}
+{% set h = hostvars[host] %}
+{{ h.ec2_private_ip_address }}   {{ h.ec2_private_dns_name }}  {{ h.ec2_tag_Name }}
+{% endif %}
+{% endfor %}
