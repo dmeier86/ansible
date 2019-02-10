@@ -25,7 +25,7 @@
       Service: kubemaster
       Environment: Dev
       Finance-ID: 1337
-    securitygroups: ['SSH']                                     # multiple groups seperatet by comma e.g. ['a','b']
+    securitygroups: ['SSH', 'default']                                     # multiple groups seperatet by comma e.g. ['a','b']
 
   gather_facts: False
   tasks:
@@ -144,8 +144,6 @@
     - { role: technology/vim-enhanced }
     - { role: technology/htop }
     - { role: technology/docker }
-    - { role: technology/kubernetes-worker }
-
 
 # Deploy worker-nodes
 - hosts: "tag_Application_Kubernetes:&tag_Service_Kubeworker"
@@ -155,7 +153,7 @@
     - { role: technology/kubernetes-worker }
 
 
-# Deploy some Stuff to Kube-Master
+# Deploy master-nodes
 
 - hosts: "tag_Application_Kubernetes:&tag_Service_Kubemaster"
   gather_facts: no
