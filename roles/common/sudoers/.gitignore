@@ -1,0 +1,2 @@
+# Ignore pycache folder
+filter_plugins/__pycache__/
